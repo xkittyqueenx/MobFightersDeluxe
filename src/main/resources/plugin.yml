@@ -1,0 +1,4 @@
+name: MobFightersDeluxe
+version: '0.0.1-SNAPSHOT'
+main: dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe
+api-version: '1.21'
