@@ -3,6 +3,8 @@ package dev.xkittyqueenx.mobFightersDeluxe.managers;
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
 import dev.xkittyqueenx.mobFightersDeluxe.events.SmashDamageEvent;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
+import dev.xkittyqueenx.mobFightersDeluxe.fighters.SpectatorFighter;
+import dev.xkittyqueenx.mobFightersDeluxe.managers.gamemodes.SmashGamemode;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.smashserver.SmashServer;
 import dev.xkittyqueenx.mobFightersDeluxe.utilities.DamageUtil;
 import dev.xkittyqueenx.mobFightersDeluxe.utilities.Utils;
@@ -23,11 +25,13 @@ import org.bukkit.util.Vector;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.WeakHashMap;
 
 public class DamageManager implements Listener {
 
     private final Plugin plugin = MobFightersDeluxe.getInstance();
     private static final List<SmashDamageEvent> damage_record = new ArrayList<>();
+    private static final WeakHashMap<Player, BukkitRunnable> activeStuns = new WeakHashMap<>();
 
     public DamageManager() {
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
@@ -196,33 +200,90 @@ public class DamageManager implements Listener {
             return;
         }
         double damageMultiplier = 1;
-        double starting_health = damagee.getHealth();
+        double knockbackPercentage = 0.0;
+        if (damagee instanceof Mob mob) {
+            Player player = Utils.getPlayerFromMob(mob);
+            if (player != null) {
+                SmashServer smashServer = GameManager.getPlayerServer(player);
+                if (smashServer != null) {
+                    Fighter fighter = FighterManager.getPlayerFighters().get(player);
+                    knockbackPercentage = fighter.getKnockbackPercentage();
+                } else {
+                    knockbackPercentage = 0.0;
+                }
+            }
+        } else if (damagee instanceof Player player) {
+            SmashServer smashServer = GameManager.getPlayerServer(player);
+            if (smashServer != null) {
+                Fighter fighter = FighterManager.getPlayerFighters().get(player);
+                knockbackPercentage = fighter.getKnockbackPercentage();
+            } else {
+                knockbackPercentage = 0.0;
+            }
+        } else {
+            knockbackPercentage = 0.0;
+        }
         double absorption_health = damagee.getAbsorptionAmount();
         if (damagee instanceof Mob mob) {
             Player player = Utils.getPlayerFromMob(mob);
             if (player != null) {
-                if (FighterManager.getPlayerFighters().get(player) != null) {
-                    damageMultiplier = Math.max(0, 1 - FighterManager.getPlayerFighters().get(player).getArmor() * 0.08f);
+                Fighter fighter = FighterManager.getPlayerFighters().get(player);
+                if (fighter != null) {
+                    damageMultiplier = Math.max(0, 1 - fighter.getArmor() * 0.07f);
                 }
+            }
+        }
+        if (damagee instanceof Player player) {
+            Fighter fighter = FighterManager.getPlayerFighters().get(player);
+            if (fighter != null) {
+                damageMultiplier = Math.max(0, 1 - fighter.getArmor() * 0.07f);
             }
         }
         if (ignoreArmor) {
             damageMultiplier = 1;
         }
-        boolean died = false;
-        double new_health;
         double dealt;
         if ((float) damagee.getNoDamageTicks() > (float) damagee.getMaximumNoDamageTicks() / 2.0F) {
             dealt = Math.max(damage - damagee.getLastDamage(), 0) * damageMultiplier;
         } else {
             dealt = damage * damageMultiplier;
         }
+        if (absorption_health > 0) {
+            damagee.setAbsorptionAmount(Math.max(0, absorption_health - dealt));
+            dealt -= absorption_health;
+        }
         damagee.setLastDamage(damage);
-        if (damagee instanceof Player player) {
+        if (damagee instanceof Mob mob) {
+            Player player = Utils.getPlayerFromMob(mob);
+            if (player != null) {
+                SmashServer server = GameManager.getPlayerServer(player);
+                if (server != null) {
+                    Fighter fighter = FighterManager.getPlayerFighters().get(player);
+                    if (fighter != null) {
+                        double percentage = fighter.getKnockbackPercentage();
+                        fighter.setKnockbackPercentage(Math.min(percentage + Math.max(0.0, dealt), 999.90));
+                    }
+                }
+                player.sendHealthUpdate();
+            }
+        } else if (damagee instanceof Player player) {
+            SmashServer server = GameManager.getPlayerServer(player);
+            if (server != null) {
+                Fighter fighter = FighterManager.getPlayerFighters().get(player);
+                if (fighter != null) {
+                    double percentage = fighter.getKnockbackPercentage();
+                    fighter.setKnockbackPercentage(Math.min(percentage + Math.max(0.0, dealt), 999.90));
+                }
+            }
             player.sendHealthUpdate();
         }
         damagee.playHurtAnimation(0);
         storeDamageEvent(e);
+        if (damagee instanceof Player player) {
+            if (e.getDamageCause() == EntityDamageEvent.DamageCause.VOID) {
+                Objects.requireNonNull(GameManager.getPlayerServer(player)).death(player);
+            }
+        }
         if (damager instanceof Player player && cause == EntityDamageEvent.DamageCause.PROJECTILE && projectile instanceof Arrow) {
             player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.5f, 0.5f);
         }
@@ -231,26 +292,36 @@ public class DamageManager implements Listener {
         }
         if (knockbackMultiplier > 0 && (origin != null || damager != null || projectile != null)) {
             double knockback = Math.max(damage, 2);
-            knockback = Math.log10(knockback);
+            knockback = Math.log10(knockback * 0.8);
             knockback *= knockbackMultiplier;
 
-            if (damagee instanceof Player player) {
-                if (FighterManager.getPlayerFighters().get(player) != null) {
-                    knockback *= FighterManager.getPlayerFighters().get(player).getKnockback();
+            if (damagee instanceof Mob mob) {
+                Player player = Utils.getPlayerFromMob(mob);
+                Fighter fighter = FighterManager.getPlayerFighters().get(player);
+                if (fighter != null) {
+                    knockback *= fighter.getKnockback();
                 }
-                knockback *= (1 + 0.1 * (Objects.requireNonNull(damagee.getAttribute(Attribute.MAX_HEALTH)).getBaseValue() - starting_health));
+                knockback *= (1 + 0.0125 * (knockbackPercentage - 0));
+            } else if (damagee instanceof Player player) {
+                Fighter fighter = FighterManager.getPlayerFighters().get(player);
+                if (fighter != null) {
+                    knockback *= fighter.getKnockback();
+                }
+                knockback *= (1 + 0.0125 * (knockbackPercentage - 0));
             }
 
             if (origin == null && damager != null) {
                 origin = damager.getLocation();
             }
-
             Vector trajectory = null;
             if (origin != null) {
                 trajectory = damagee.getLocation().toVector().subtract(origin.toVector()).setY(0).normalize();
                 trajectory.multiply(0.6 * knockback);
-                trajectory.setY(Math.abs(trajectory.getY()));
+
+                Vector originalDirection = damagee.getLocation().toVector().subtract(origin.toVector()).normalize();
+                trajectory.setY(originalDirection.getY() * 0.6 * knockback);
             }
+
             if (projectile != null) {
                 trajectory = projectile.getVelocity();
                 trajectory.setY(0);
@@ -258,67 +329,420 @@ public class DamageManager implements Listener {
                 trajectory.setY(0.06);
             }
             double vel = 0.2 + trajectory.length() * 0.8;
-            VelocityUtil.setVelocity(damagee, trajectory, vel, false,
-                    0, Math.abs(0.2 * knockback), 0.2 + (0.02 * knockback), true, 0.4);
-            if (vel > 2.5) {
-                if (damagee instanceof Player player) {
+            if (vel >= 2.5) {
+                if (damagee instanceof Mob mob) {
+                    Player player = Utils.getPlayerFromMob(mob);
+                    if (player != null) {
+                        final boolean allowFlight = player.getAllowFlight();
+                        player.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, player.getLocation().add(0, 1, 0), (int) vel, 0.6f, 0.4f, 0.6f, 0, null, true);
+                        Fighter kit = FighterManager.getPlayerFighters().get(player);
+                        LivingEntity living;
+                        if (kit.getKnockbackPercentage() >= 300.0) {
+                            living = player.getWorld().spawn(player.getEyeLocation().clone().subtract(0, 0.5, 0), Vex.class);
+                        } else {
+                            living = player.getWorld().spawn(player.getEyeLocation().clone().subtract(0, 0.5, 0), Chicken.class);
+                        }
+                        for (Player hide : player.getWorld().getPlayers()) {
+                            if (hide.equals(player)) {
+                                continue;
+                            }
+                            hide.hideEntity(plugin, living);
+                        }
+                        living.setInvisible(true);
+                        living.setSilent(true);
+                        Objects.requireNonNull(living.getAttribute(Attribute.SCALE)).setBaseValue(0.1);
+                        living.addPassenger(player);
+                        if (living instanceof Chicken chicken) {
+                            chicken.setAggressive(false);
+                            chicken.setBaby();
+                            chicken.setAware(false);
+                        }
+                        if (living instanceof Vex vex) {
+                            vex.setAggressive(false);
+                            vex.setCharging(false);
+                            vex.setTarget(null);
+                            vex.setAware(false);
+                        }
+                        for (Player show : player.getWorld().getPlayers()) {
+                            if (show.equals(player)) {
+                                continue;
+                            }
+                            show.showEntity(plugin, living);
+                        }
+                        final double movementSpeed = 0.1;
+                        VelocityUtil.setVelocity(living, trajectory, vel, false,
+                                0, Math.abs(0.2 * knockback), Math.min(0.4 + (0.04 * knockback), 0.6), true, 0.4);
+                        kit.setRooted(true);
+                        int duration = Math.min((int) (3 * vel), 50);
+                        if (vel >= 4.5) {
+                            damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_GROUND_HEAVY, 1.25f, 1f);
+                        } else if (vel >= 3.5) {
+                            damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_GROUND, 1f, 1f);
+                        } else {
+                            damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_AIR, 0.75f, 1f);
+                        }
+                        if (activeStuns.containsKey(player)) {
+                            BukkitRunnable oldStun = activeStuns.get(player);
+                            oldStun.cancel();
+                            activeStuns.remove(player);
+                            Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
+                        }
+                        Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(0);
+                        BukkitRunnable runnable = new BukkitRunnable() {
+                            int ticks = 0;
+                            @Override
+                            public void run() {
+                                ticks++;
+                                if (living instanceof Vex) {
+                                    if (living.getLocation().clone().add(living.getVelocity().clone()).getBlock().isSolid() || living.getLocation().clone().subtract(living.getVelocity().clone()).getBlock().isSolid() || living.getLocation().clone().add(0, 1, 0).getBlock().isSolid() || living.getLocation().clone().subtract(living.getVelocity().clone().multiply(0.5)).getBlock().isSolid() || living.getLocation().clone().add(living.getVelocity().clone().multiply(0.5)).getBlock().isSolid() ||
+                                            living.getLocation().clone().add(living.getVelocity().clone().multiply(1.5)).getBlock().isSolid() || living.getLocation().clone().subtract(living.getVelocity().clone().multiply(1.5)).getBlock().isSolid() || living.getLocation().clone().add(living.getLocation().getDirection()).getBlock().isSolid() || living.getLocation().clone().subtract(living.getLocation().getDirection()).getBlock().isSolid()) {
+                                        return;
+                                    }
+                                }
+                                Fighter kit = FighterManager.getPlayerFighters().get(player);
+                                if (ticks >= duration || kit == null || kit instanceof SpectatorFighter) {
+                                    activeStuns.remove(player);
+                                    if (kit == null || kit instanceof SpectatorFighter) {
+                                        living.removePassenger(player);
+                                        living.remove();
+                                        Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
+                                        cancel();
+                                        return;
+                                    }
+
+                                    Vector silverfishVelocity = living.getVelocity().clone();
+
+                                    // Get the velocity magnitude to scale our compensation
+                                    double velocityMagnitude = silverfishVelocity.length();
+
+                                    // Create a normalized direction vector for the offset
+                                    Vector directionVector = silverfishVelocity.clone().normalize();
+
+                                    // Calculate an adaptive offset that scales with velocity
+                                    // The scaling factor can be adjusted based on testing
+                                    double offsetScale = 3 + (3.5 * velocityMagnitude);
+                                    Vector offsetVector = directionVector.multiply(-offsetScale);
+
+//                                    player.sendMessage("" + velocityMagnitude);
+//                                    player.sendMessage("" + offsetScale);
+
+                                    // Use silverfish location as base position
+                                    Location targetLocation = living.getLocation().clone();
+
+                                    // Apply our calculated offset
+                                    targetLocation.add(offsetVector);
+
+                                    // Preserve player's view direction
+                                    targetLocation.setPitch(player.getLocation().getPitch());
+                                    targetLocation.setYaw(player.getLocation().getYaw());
+                                    if (offsetScale > 8) {
+                                        targetLocation.subtract(new Vector(0, velocityMagnitude, 0));
+                                    } else {
+                                        targetLocation.subtract(new Vector(0, velocityMagnitude / 2, 0));
+                                    }
+
+                                    // Check if target location or block above is solid
+                                    if (targetLocation.getBlock().isSolid() || targetLocation.clone().add(0, 1, 0).getBlock().isSolid()) {
+                                        // Find a safe location nearby
+                                        Location safeLocation = findSafeLocation(targetLocation);
+                                        if (safeLocation != null) {
+                                            targetLocation = safeLocation;
+                                        } else {
+                                            // If no safe location found, keep the player at their current location
+                                            targetLocation = player.getLocation();
+                                        }
+                                    }
+
+                                    // Remove the player from the silverfish
+                                    living.removePassenger(player);
+
+                                    player.teleport(targetLocation);
+
+                                    // Then remove the silverfish
+                                    living.remove();
+
+                                    Fighter kit1 = FighterManager.getPlayerFighters().get(player);
+                                    if (kit1 == null) {
+                                        return;
+                                    }
+                                    Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
+                                    player.setAllowFlight(allowFlight);
+                                    Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
+                                    Utils.sendActionBarMessage(" ", player);
+                                    kit1.setRooted(false);
+                                    cancel();
+                                    return;
+                                }
+                                if (living.getVelocity().lengthSquared() < 0.05 && ticks > 5) {
+                                    Vector silverfishVelocity = living.getVelocity().clone();
+
+                                    // Use the silverfish's location as the reference point
+                                    Location entityLocation = living.getLocation().clone();
+
+                                    // Preserve the player's looking direction
+                                    entityLocation.setPitch(player.getLocation().getPitch());
+                                    entityLocation.setYaw(player.getLocation().getYaw());
+
+                                    // Check if target location or block above is solid
+                                    if (entityLocation.getBlock().isSolid() || entityLocation.clone().add(0, 1, 0).getBlock().isSolid()) {
+                                        // Find a safe location nearby
+                                        Location safeLocation = findSafeLocation(entityLocation);
+                                        if (safeLocation != null) {
+                                            entityLocation = safeLocation;
+                                        } else {
+                                            // If no safe location found, keep the player at their current location
+                                            entityLocation = player.getLocation();
+                                        }
+                                    }
+
+                                    // Remove the player from the silverfish
+                                    living.removePassenger(player);
+
+                                    // Teleport to the entity's location
+                                    player.teleport(entityLocation);
+
+                                    // Then remove the silverfish
+                                    living.remove();
+
+                                    Fighter kit1 = FighterManager.getPlayerFighters().get(player);
+                                    if (kit1 == null) {
+                                        return;
+                                    }
+                                    Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
+                                    player.setAllowFlight(allowFlight);
+                                    Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
+                                    Utils.sendActionBarMessage(" ", player);
+                                    kit1.setRooted(false);
+                                    cancel();
+                                    return;
+                                }
+                                Utils.sendActionBarMessage("<red><b>☠ STUNNED ☠", player);
+                                living.addPassenger(player);
+                            }
+                        };
+                        activeStuns.put(player, runnable);
+                        runnable.runTaskTimer(plugin, 0L, 0L);
+                    }
+                } else if (damagee instanceof Player player) {
                     final boolean allowFlight = player.getAllowFlight();
-                    player.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, player.getLocation().add(0, 1, 0), 3, 0.6f, 0.4f, 0.6f, 0, null, true);
-                    Fighter fighter = FighterManager.getPlayerFighters().get(player);
-                    fighter.setRooted(true);
-                    fighter.setInvincible(true);
-                    fighter.setIntangible(true);
-                    int duration = (int) (4 * vel);
-                    if (vel >= 4) {
+                    player.getWorld().spawnParticle(Particle.DAMAGE_INDICATOR, player.getLocation().add(0, 1, 0), (int) vel, 0.6f, 0.4f, 0.6f, 0, null, true);
+                    Fighter kit = FighterManager.getPlayerFighters().get(player);
+                    LivingEntity living;
+                    if (kit.getKnockbackPercentage() >= 300.0) {
+                        living = player.getWorld().spawn(player.getEyeLocation().clone().subtract(0, 0.5, 0), Vex.class);
+                    } else {
+                        living = player.getWorld().spawn(player.getEyeLocation().clone().subtract(0, 0.5, 0), Chicken.class);
+                    }
+                    for (Player hide : player.getWorld().getPlayers()) {
+                        if (hide.equals(player)) {
+                            continue;
+                        }
+                        hide.hideEntity(plugin, living);
+                    }
+                    living.setInvisible(true);
+                    living.setSilent(true);
+                    Objects.requireNonNull(living.getAttribute(Attribute.SCALE)).setBaseValue(0.1);
+                    living.addPassenger(player);
+                    if (living instanceof Chicken chicken) {
+                        chicken.setAggressive(false);
+                        chicken.setBaby();
+                        chicken.setAware(false);
+                    }
+                    if (living instanceof Vex vex) {
+                        vex.setAggressive(false);
+                        vex.setCharging(false);
+                        vex.setTarget(null);
+                        vex.setAware(false);
+                    }
+                    for (Player show : player.getWorld().getPlayers()) {
+                        if (show.equals(player)) {
+                            continue;
+                        }
+                        show.showEntity(plugin, living);
+                    }
+                    final double movementSpeed = 0.1;
+                    VelocityUtil.setVelocity(living, trajectory, vel, false,
+                            0, Math.abs(0.2 * knockback), Math.min(0.4 + (0.04 * knockback), 0.6), true, 0.4);
+                    kit.setRooted(true);
+                    int duration = Math.min((int) (3 * vel), 50);
+                    if (vel >= 4.5) {
                         damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_GROUND_HEAVY, 1.25f, 1f);
-                    } else if (vel >= 3.25) {
+                    } else if (vel >= 3.5) {
                         damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_GROUND, 1f, 1f);
                     } else {
                         damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_AIR, 0.75f, 1f);
                     }
+                    if (activeStuns.containsKey(player)) {
+                        BukkitRunnable oldStun = activeStuns.get(player);
+                        oldStun.cancel();
+                        activeStuns.remove(player);
+                        Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
+                    }
+                    Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(0);
                     BukkitRunnable runnable = new BukkitRunnable() {
                         int ticks = 0;
-
                         @Override
                         public void run() {
                             ticks++;
-                            if (ticks >= duration) {
-                                Fighter fighter1 = FighterManager.getPlayerFighters().get(player);
-                                if (fighter1 == null) {
+                            if (living instanceof Vex) {
+                                if (living.getLocation().clone().add(living.getVelocity().clone()).getBlock().isSolid() || living.getLocation().clone().subtract(living.getVelocity().clone()).getBlock().isSolid() || living.getLocation().clone().add(0, 1, 0).getBlock().isSolid() || living.getLocation().clone().subtract(living.getVelocity().clone().multiply(0.5)).getBlock().isSolid() || living.getLocation().clone().add(living.getVelocity().clone().multiply(0.5)).getBlock().isSolid() ||
+                                        living.getLocation().clone().add(living.getVelocity().clone().multiply(1.5)).getBlock().isSolid() || living.getLocation().clone().subtract(living.getVelocity().clone().multiply(1.5)).getBlock().isSolid() || living.getLocation().clone().add(living.getLocation().getDirection()).getBlock().isSolid() || living.getLocation().clone().subtract(living.getLocation().getDirection()).getBlock().isSolid()) {
                                     return;
                                 }
-                                player.setAllowFlight(allowFlight);
-                                Utils.sendActionBarMessage(" ", player);
-                                fighter.setInvincible(false);
-                                fighter.setIntangible(false);
-                                if (fighter.isRooted()) {
-                                    fighter.setRooted(false);
+                            }
+                            Fighter kit = FighterManager.getPlayerFighters().get(player);
+                            if (ticks >= duration || kit == null || kit instanceof SpectatorFighter) {
+                                activeStuns.remove(player);
+                                if (kit == null || kit instanceof SpectatorFighter) {
+                                    living.removePassenger(player);
+                                    living.remove();
+                                    Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
+                                    cancel();
+                                    return;
                                 }
+
+                                Vector silverfishVelocity = living.getVelocity().clone();
+
+                                // Get the velocity magnitude to scale our compensation
+                                double velocityMagnitude = silverfishVelocity.length();
+
+                                // Create a normalized direction vector for the offset
+                                Vector directionVector = silverfishVelocity.clone().normalize();
+
+                                // Calculate an adaptive offset that scales with velocity
+                                // The scaling factor can be adjusted based on testing
+                                double offsetScale = 3 + (3.5 * velocityMagnitude);
+                                Vector offsetVector = directionVector.multiply(-offsetScale);
+
+//                                    player.sendMessage("" + velocityMagnitude);
+//                                    player.sendMessage("" + offsetScale);
+
+                                // Use silverfish location as base position
+                                Location targetLocation = living.getLocation().clone();
+
+                                // Apply our calculated offset
+                                targetLocation.add(offsetVector);
+
+                                // Preserve player's view direction
+                                targetLocation.setPitch(player.getLocation().getPitch());
+                                targetLocation.setYaw(player.getLocation().getYaw());
+                                if (offsetScale > 8) {
+                                    targetLocation.subtract(new Vector(0, velocityMagnitude, 0));
+                                } else {
+                                    targetLocation.subtract(new Vector(0, velocityMagnitude / 2, 0));
+                                }
+
+                                // Check if target location or block above is solid
+                                if (targetLocation.getBlock().isSolid() || targetLocation.clone().add(0, 1, 0).getBlock().isSolid()) {
+                                    // Find a safe location nearby
+                                    Location safeLocation = findSafeLocation(targetLocation);
+                                    if (safeLocation != null) {
+                                        targetLocation = safeLocation;
+                                    } else {
+                                        // If no safe location found, keep the player at their current location
+                                        targetLocation = player.getLocation();
+                                    }
+                                }
+
+                                // Remove the player from the silverfish
+                                living.removePassenger(player);
+
+                                player.teleport(targetLocation);
+
+                                // Then remove the silverfish
+                                living.remove();
+
+                                Fighter kit1 = FighterManager.getPlayerFighters().get(player);
+                                if (kit1 == null) {
+                                    return;
+                                }
+                                Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
+                                player.setAllowFlight(allowFlight);
+                                Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
+                                Utils.sendActionBarMessage(" ", player);
+                                kit1.setRooted(false);
                                 cancel();
                                 return;
                             }
-                            if (Utils.entityIsOnGround(player) && ticks > 5) {
-                                Fighter fighter1 = FighterManager.getPlayerFighters().get(player);
-                                if (fighter1 == null) {
+                            if (living.getVelocity().lengthSquared() < 0.05 && ticks > 5) {
+                                Vector silverfishVelocity = living.getVelocity().clone();
+
+                                // Use the silverfish's location as the reference point
+                                Location entityLocation = living.getLocation().clone();
+
+                                // Preserve the player's looking direction
+                                entityLocation.setPitch(player.getLocation().getPitch());
+                                entityLocation.setYaw(player.getLocation().getYaw());
+
+                                // Check if target location or block above is solid
+                                if (entityLocation.getBlock().isSolid() || entityLocation.clone().add(0, 1, 0).getBlock().isSolid()) {
+                                    // Find a safe location nearby
+                                    Location safeLocation = findSafeLocation(entityLocation);
+                                    if (safeLocation != null) {
+                                        entityLocation = safeLocation;
+                                    } else {
+                                        // If no safe location found, keep the player at their current location
+                                        entityLocation = player.getLocation();
+                                    }
+                                }
+
+                                // Remove the player from the silverfish
+                                living.removePassenger(player);
+
+                                // Teleport to the entity's location
+                                player.teleport(entityLocation);
+
+                                // Then remove the silverfish
+                                living.remove();
+
+                                Fighter kit1 = FighterManager.getPlayerFighters().get(player);
+                                if (kit1 == null) {
                                     return;
                                 }
+                                Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(movementSpeed);
                                 player.setAllowFlight(allowFlight);
+                                Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
                                 Utils.sendActionBarMessage(" ", player);
-                                fighter.setInvincible(false);
-                                fighter.setIntangible(false);
-                                if (fighter.isRooted()) {
-                                    fighter.setRooted(false);
-                                }
+                                kit1.setRooted(false);
                                 cancel();
                                 return;
                             }
                             Utils.sendActionBarMessage("<red><b>☠ STUNNED ☠", player);
+                            living.addPassenger(player);
                         }
                     };
+                    activeStuns.put(player, runnable);
                     runnable.runTaskTimer(plugin, 0L, 0L);
+                }
+            } else {
+                if (damagee instanceof Mob mob) {
+                    Player player = Utils.getPlayerFromMob(mob);
+                    if (player != null) {
+                        VelocityUtil.setVelocity(player, trajectory, vel, false,
+                                0, Math.abs(0.2 * knockback), Math.min(0.4 + (0.04 * knockback), 0.6), true, 0.5);
+                    }
+                } else if (damagee instanceof Player player) {
+                    VelocityUtil.setVelocity(player, trajectory, vel, false,
+                            0, Math.abs(0.2 * knockback), Math.min(0.4 + (0.04 * knockback), 0.6), true, 0.5);
                 }
             }
         }
+    }
+
+    private Location findSafeLocation(Location origin) {
+        // Check in a small radius around the original location
+        for (int x = -2; x <= 2; x++) {
+            for (int y = -2; y <= 2; y++) {
+                for (int z = -2; z <= 2; z++) {
+                    Location check = origin.clone().add(x, y, z);
+                    // A location is safe if both the block at that location and the block above are not solid
+                    if (!check.getBlock().isSolid() && !check.clone().add(0, 1, 0).getBlock().isSolid()) {
+                        return check;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public static void storeDamageEvent(SmashDamageEvent e) {
