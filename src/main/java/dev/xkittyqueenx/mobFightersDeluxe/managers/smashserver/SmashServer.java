@@ -42,6 +42,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scoreboard.DisplaySlot;
+import org.bukkit.util.Vector;
 
 import java.io.File;
 import java.util.*;
@@ -518,40 +519,35 @@ public class SmashServer implements Listener, Runnable {
             player.sendMessage(MiniMessage.miniMessage().deserialize("<#FAA0A0><b>You have " + lives.get(player) + " " + (lives.get(player) == 1 ? "life" : "lives") + " left!"));
         }
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BIT, 2f, 0.5f);
-        player.setGameMode(GameMode.SPECTATOR);
+        FighterManager.unequipPlayer(player);
         FighterManager.equipPlayer(player, new SpectatorFighter(glyph));
-        player.setGameMode(GameMode.SPECTATOR);
+        player.setVelocity(new Vector(0, 1, 0));
+        player.setAllowFlight(true);
+        player.setFlying(true);
         FighterManager.getPlayerFighters().get(player).setGlyph("☠ " + glyph);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> FighterManager.openKitMenu(player), 20L);
-        Bukkit.getScheduler().scheduleSyncDelayedTask(MobFightersDeluxe.getInstance(), new Runnable() {
-            @Override
-            public void run() {
-                if (state == GameState.GAME_PLAYING && getLives(player) > 0) {
-                    if (player.getGameMode() != GameMode.SPECTATOR) {
-                        return;
-                    }
-                    player.teleport(current_gamemode.getRandomRespawnPoint(player));
-                    if (selected_fighter.containsKey(player)) {
-                        Fighter kit_new = selected_fighter.get(player);
+        Bukkit.getScheduler().scheduleSyncDelayedTask(MobFightersDeluxe.getInstance(), () -> {
+            if (state == GameState.GAME_PLAYING && getLives(player) > 0) {
+                player.teleport(current_gamemode.getRandomRespawnPoint(player));
+                if (selected_fighter.containsKey(player)) {
+                    Fighter kit_new = selected_fighter.get(player);
+                    player.setGameMode(GameMode.ADVENTURE);
+                    FighterManager.equipPlayer(player, kit_new);
+                    selected_fighter.remove(player);
+                } else {
+                    if (kit != null && !kit.getName().equals("Temporary Spectator")) {
                         player.setGameMode(GameMode.ADVENTURE);
-                        FighterManager.equipPlayer(player, kit_new);
-                        selected_fighter.remove(player);
-                    } else {
+                        FighterManager.equipPlayer(player, kit);
+                    }
+                    if (ultimateChargeMap.containsKey(player)) {
                         if (kit != null && !kit.getName().equals("Temporary Spectator")) {
-                            player.setGameMode(GameMode.ADVENTURE);
-                            FighterManager.equipPlayer(player, kit);
-                        }
-                        if (ultimateChargeMap.containsKey(player)) {
-                            if (kit != null && !kit.getName().equals("Temporary Spectator")) {
-                                FighterManager.equipPlayer(player, kit, ultimateChargeMap);
-                            }
-                        } else if (kit != null && !kit.getName().equals("Temporary Spectator")) {
                             FighterManager.equipPlayer(player, kit, ultimateChargeMap);
                         }
+                    } else if (kit != null && !kit.getName().equals("Temporary Spectator")) {
+                        FighterManager.equipPlayer(player, kit, ultimateChargeMap);
                     }
                 }
             }
-        }, 80L);
+        }, 40L);
     }
 
     public GameMap getGameMap() {

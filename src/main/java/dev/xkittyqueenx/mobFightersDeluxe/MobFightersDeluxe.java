@@ -61,7 +61,7 @@ public final class MobFightersDeluxe extends JavaPlugin implements Listener {
     public void onEnable() {
         ourInstance = this;
         Bukkit.getPluginManager().registerEvents(this, this);
-
+        saveResource("fighters.yml", false);
         fighterManager = new FighterManager();
         configManager = new ConfigManager();
         gameManager = new GameManager();
@@ -251,7 +251,7 @@ public final class MobFightersDeluxe extends JavaPlugin implements Listener {
             if (blockIn.getType() == Material.LAVA) {
                 lighting = true;
             }
-            if (player.getGameMode() == GameMode.CREATIVE) {
+            if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) {
                 return;
             }
             DamageUtil.borderKill(player, lighting);

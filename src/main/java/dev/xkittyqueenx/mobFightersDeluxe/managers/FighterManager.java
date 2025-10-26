@@ -58,8 +58,8 @@ public class FighterManager implements Listener {
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
-        fighter.setOwner(player);
         playerFighters.put(player, fighter);
+        Bukkit.getScheduler().runTaskLater(MobFightersDeluxe.getInstance(), () -> fighter.setOwner(player), 2L);
     }
 
     public static void equipPlayer(Player player, Fighter check, Map<Player, Float> ultimateChargeMap) {
@@ -76,8 +76,8 @@ public class FighterManager implements Listener {
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
-        fighter.setOwner(player);
         playerFighters.put(player, fighter);
+        Bukkit.getScheduler().runTaskLater(MobFightersDeluxe.getInstance(), () -> fighter.setOwner(player), 4L);
         if (ultimateChargeMap.containsKey(player)) {
             float storedCharge = ultimateChargeMap.get(player);
             for (Attribute attribute : fighter.getAttributes()) {

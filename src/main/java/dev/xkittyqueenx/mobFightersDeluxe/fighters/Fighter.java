@@ -51,6 +51,7 @@ public abstract class Fighter implements Listener, Runnable {
     protected String icon = "";
     protected String glyph = "";
     public Sound selectSound = Sound.UI_BUTTON_CLICK;
+    public Sound hurtSound = Sound.ENTITY_PLAYER_HURT;
 
     protected boolean invincible = false;
     protected boolean intangible = false;
@@ -75,6 +76,8 @@ public abstract class Fighter implements Listener, Runnable {
     private boolean preview_hotbar_equipped = false;
     private boolean game_hotbar_equipped = false;
     private boolean playing = false;
+
+    protected MiniMessage mm = MiniMessage.miniMessage();
 
     public Fighter() {
         plugin = MobFightersDeluxe.getInstance();
@@ -133,6 +136,8 @@ public abstract class Fighter implements Listener, Runnable {
         Objects.requireNonNull(owner.getAttribute(org.bukkit.attribute.Attribute.JUMP_STRENGTH)).setBaseValue(0.4199999);
         player.setExp(0);
         player.setGameMode(GameMode.ADVENTURE);
+        player.setFlying(false);
+        player.setAllowFlight(true);
         hotbarAbilities = new Ability[9];
         initializeKit();
         SmashServer server = GameManager.getPlayerServer(owner);
@@ -143,7 +148,6 @@ public abstract class Fighter implements Listener, Runnable {
         updatePlaying(server.getState(), true);
         task = Bukkit.getScheduler().runTaskTimer(MobFightersDeluxe.getInstance(), this, 0L, 0L);
         equipDisguise();
-        owner.setInvisible(true);
     }
 
     public void updatePlaying(short new_state, boolean reload_hotbar) {
@@ -279,6 +283,9 @@ public abstract class Fighter implements Listener, Runnable {
             item.setData(DataComponentTypes.MAX_DAMAGE, 10000);
             item.unsetData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
             item.setData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, false); // Make it glow!
+            if (item.getType() == Material.NETHER_STAR) {
+                item.unsetData(DataComponentTypes.UNBREAKABLE);
+            }
         }
         owner.getInventory().setItem(hotbarSlot, item);
     }
@@ -319,7 +326,6 @@ public abstract class Fighter implements Listener, Runnable {
         owner.setCollidable(false);
 
         disguise = (Mob) owner.getWorld().spawnEntity(owner.getLocation(), disguiseType, false);
-        disguise.setInvulnerable(true);
         disguise.setCanPickupItems(false);
         disguise.setRemoveWhenFarAway(false);
         disguise.setLeftHanded(false);
@@ -344,6 +350,9 @@ public abstract class Fighter implements Listener, Runnable {
         textDisplay.setBillboard(Display.Billboard.CENTER);
         textDisplay.setTransformationMatrix(new Matrix4f().scale(0.75f));
 
+        owner.hideEntity(plugin, disguise);
+        owner.hideEntity(plugin, textDisplay);
+
         PlayerDisguiseEvent disguiseEvent = new PlayerDisguiseEvent(owner, disguise);
         disguiseEvent.callEvent();
     }
@@ -353,7 +362,6 @@ public abstract class Fighter implements Listener, Runnable {
         PlayerUndisguiseEvent playerUndisguiseEvent = new PlayerUndisguiseEvent(owner);
         playerUndisguiseEvent.callEvent();
         if (disguise != null) {
-            owner.setInvisible(false);
             owner.setCollidable(true);
             owner = null;
             disguise.remove();

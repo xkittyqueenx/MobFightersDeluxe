@@ -1,0 +1,5 @@
+zombie:
+  melee: 6.0
+  armor: 4.0
+  regen: 0.25
+  knockback: 1.3

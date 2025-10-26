@@ -12,8 +12,10 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
+import org.bukkit.util.BoundingBox;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
@@ -105,6 +107,59 @@ public class Utils {
         } else {
             return blockBelow.isSolid();
         }
+    }
+
+    public static HashMap<Mob, Double> getInRadius(Location location, double radius) {
+        HashMap<Mob, Double> ents = new HashMap<>();
+        for (Entity cur : location.getWorld().getLivingEntities()) {
+            if (!(cur instanceof Mob mob)) continue;
+            Player player = getPlayerFromMob(mob);
+            if (player == null) continue;
+            BoundingBox bbox = mob.getBoundingBox();
+            double offset;
+            if (bbox.contains(location.getX(), location.getY(), location.getZ())) {
+                offset = 0;
+            } else {
+                // Calculate the shortest distance from the location to the bounding box
+                double dx = Math.max(Math.max(bbox.getMinX() - location.getX(), 0), location.getX() - bbox.getMaxX());
+                double dy = Math.max(Math.max(bbox.getMinY() - location.getY(), 0), location.getY() - bbox.getMaxY());
+                double dz = Math.max(Math.max(bbox.getMinZ() - location.getZ(), 0), location.getZ() - bbox.getMaxZ());
+
+                offset = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+            // If within radius, add to the result map
+            if (offset < radius) {
+                ents.put(mob, 1 - (offset / radius));
+            }
+        }
+        return ents;
+    }
+
+    public static List<Mob> getNearby(Location location, double radius) {
+        List<Mob> ents = new ArrayList<>();
+
+        for (Entity cur : location.getWorld().getLivingEntities()) {
+            if (!(cur instanceof Mob mob)) continue;
+            Player player = getPlayerFromMob(mob);
+            if (player == null) continue;
+            BoundingBox bbox = mob.getBoundingBox();
+            double offset;
+            if (bbox.contains(location.getX(), location.getY(), location.getZ())) {
+                offset = 0;
+            } else {
+                // Calculate the shortest distance from the location to the bounding box
+                double dx = Math.max(Math.max(bbox.getMinX() - location.getX(), 0), location.getX() - bbox.getMaxX());
+                double dy = Math.max(Math.max(bbox.getMinY() - location.getY(), 0), location.getY() - bbox.getMaxY());
+                double dz = Math.max(Math.max(bbox.getMinZ() - location.getZ(), 0), location.getZ() - bbox.getMaxZ());
+
+                offset = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+            if (offset < radius) {
+                ents.add(mob);
+            }
+        }
+
+        return ents;
     }
 
 }

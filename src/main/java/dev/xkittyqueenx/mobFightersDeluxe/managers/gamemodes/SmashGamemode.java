@@ -3,7 +3,6 @@ package dev.xkittyqueenx.mobFightersDeluxe.managers.gamemodes;
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.SpectatorFighter;
-import dev.xkittyqueenx.mobFightersDeluxe.fighters.original.SkeletonFighter;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.original.ZombieFighter;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.FighterManager;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.maps.GameMap;
@@ -44,7 +43,6 @@ public class SmashGamemode implements Listener {
 
     public void updateAllowedKits() {
         allowed_fighters.clear();
-        allowed_fighters.add(new SkeletonFighter());
         allowed_fighters.add(new ZombieFighter());
     }
 

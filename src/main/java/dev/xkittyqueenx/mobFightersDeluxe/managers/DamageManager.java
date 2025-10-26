@@ -139,15 +139,22 @@ public class DamageManager implements Listener {
             return;
         }
         if (e.getDamagee() != null && e.getDamagee() instanceof Mob damagee) {
+            Player player = Utils.getPlayerFromMob(damagee);
             // Check if the damagee can be hit by the damager again
             if (!e.getIgnoreDamageDelay()) {
-                if (!DamageUtil.getDamageRateTracker(damagee).canBeHurtBy(e.getDamager())) {
+                if (!DamageUtil.getDamageRateTracker(player).canBeHurtBy(e.getDamager())) {
+                    e.setCancelled(true);
+                    return;
+                }
+            }
+        } else if (e.getDamagee() != null && e.getDamagee() instanceof Player player) {
+            if (!e.getIgnoreDamageDelay()) {
+                if (!DamageUtil.getDamageRateTracker(player).canBeHurtBy(e.getDamager())) {
                     e.setCancelled(true);
                     return;
                 }
             }
         }
-
         if (e.getDamager() != null && e.getDamager() instanceof Player damager) {
             if (damager.getGameMode() != GameMode.SURVIVAL && damager.getGameMode() != GameMode.ADVENTURE) {
                 e.setCancelled(true);
@@ -261,6 +268,8 @@ public class DamageManager implements Listener {
                     Fighter fighter = FighterManager.getPlayerFighters().get(player);
                     if (fighter != null) {
                         double percentage = fighter.getKnockbackPercentage();
+                        fighter.getDisguise().playHurtAnimation(0);
+                        fighter.getDisguise().getWorld().playSound(fighter.getDisguise().getLocation(), fighter.hurtSound, 1f, 1f);
                         fighter.setKnockbackPercentage(Math.min(percentage + Math.max(0.0, dealt), 999.90));
                     }
                 }
@@ -272,12 +281,13 @@ public class DamageManager implements Listener {
                 Fighter fighter = FighterManager.getPlayerFighters().get(player);
                 if (fighter != null) {
                     double percentage = fighter.getKnockbackPercentage();
+                    fighter.getDisguise().playHurtAnimation(0);
+                    fighter.getDisguise().getWorld().playSound(fighter.getDisguise().getLocation(), fighter.hurtSound, 1f, 1f);
                     fighter.setKnockbackPercentage(Math.min(percentage + Math.max(0.0, dealt), 999.90));
                 }
             }
             player.sendHealthUpdate();
         }
-        damagee.playHurtAnimation(0);
         storeDamageEvent(e);
         if (damagee instanceof Player player) {
             if (e.getDamageCause() == EntityDamageEvent.DamageCause.VOID) {
@@ -317,9 +327,6 @@ public class DamageManager implements Listener {
             if (origin != null) {
                 trajectory = damagee.getLocation().toVector().subtract(origin.toVector()).setY(0).normalize();
                 trajectory.multiply(0.6 * knockback);
-
-                Vector originalDirection = damagee.getLocation().toVector().subtract(origin.toVector()).normalize();
-                trajectory.setY(originalDirection.getY() * 0.6 * knockback);
             }
 
             if (projectile != null) {

@@ -61,10 +61,21 @@ public class CommandMobFighters {
     public static LiteralCommandNode<CommandSourceStack> fightersCommand() {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("mf");
         root.then(Commands.literal("admin")
+                .then(Commands.literal("reload")
+                        .executes(ctx -> {
+                            if (!(ctx.getSource().getExecutor() instanceof Player player)) {
+                                return Command.SINGLE_SUCCESS;
+                            }
+                            if (!player.isOp()) {
+                                return Command.SINGLE_SUCCESS;
+                            }
+                            MobFightersDeluxe.getInstance().getConfigManager().reloadFightersConfig();
+                            return Command.SINGLE_SUCCESS;
+                        })
+                )
                 .then(Commands.literal("world")
                         .executes(ctx -> {
                             if (!(ctx.getSource().getExecutor() instanceof Player player)) {
-                                Bukkit.shutdown();
                                 return Command.SINGLE_SUCCESS;
                             }
                             if (!player.isOp()) {
