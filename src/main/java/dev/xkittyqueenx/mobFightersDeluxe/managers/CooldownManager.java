@@ -7,6 +7,7 @@ import dev.xkittyqueenx.mobFightersDeluxe.events.RechargeAttributeEvent;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.smashserver.SmashServer;
 import dev.xkittyqueenx.mobFightersDeluxe.utilities.Utils;
+import net.kyori.adventure.key.Key;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -95,21 +96,21 @@ public class CooldownManager extends BukkitRunnable {
         if (ability != null && ability.equals(attribute)) {
             ItemStack itemStack = abilityUser.getInventory().getItem(0);
             if (itemStack != null) {
-                abilityUser.setCooldown(itemStack, (int) (20 * Utils.msToSeconds(duration)));
+                abilityUser.setCooldown(Key.key("0"), (int) (20 * Utils.msToSeconds(duration)));
             }
         }
         Ability ability2 = kit.getAbilityInSlot(1);
         if (ability2 != null && ability2.equals(attribute)) {
             ItemStack itemStack = abilityUser.getInventory().getItem(1);
             if (itemStack != null) {
-                abilityUser.setCooldown(itemStack, (int) (20 * Utils.msToSeconds(duration)));
+                abilityUser.setCooldown(Key.key("1"), (int) (20 * Utils.msToSeconds(duration)));
             }
         }
         Ability ability3 = kit.getAbilityInSlot(2);
         if (ability3 != null && ability3.equals(attribute)) {
             ItemStack itemStack = abilityUser.getInventory().getItem(2);
             if (itemStack != null) {
-                abilityUser.setCooldown(itemStack, (int) (20 * Utils.msToSeconds(duration)));
+                abilityUser.setCooldown(Key.key("2"), (int) (20 * Utils.msToSeconds(duration)));
             }
         }
         cooldownData.add(new CooldownData(attribute, duration, abilityUser));

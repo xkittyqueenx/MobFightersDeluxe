@@ -1,7 +1,6 @@
 package dev.xkittyqueenx.mobFightersDeluxe.attributes.doublejumps;
 
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Attribute;
-import dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs.Rooted;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.FighterManager;
 import dev.xkittyqueenx.mobFightersDeluxe.utilities.Utils;
@@ -12,7 +11,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
 
-public class DoubleJump extends Attribute implements Rooted {
+public class DoubleJump extends Attribute {
 
     protected double height;
     protected double power;
@@ -30,11 +29,6 @@ public class DoubleJump extends Attribute implements Rooted {
         this.pitch = pitch;
         this.double_jump_sound = double_jump_sound;
         this.runTaskTimer(plugin, 0L, 2L);
-    }
-
-    @Override
-    public void onRooted() {
-
     }
 
     @Override

@@ -1,12 +1,11 @@
 package dev.xkittyqueenx.mobFightersDeluxe.attributes;
 
-import dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs.Rooted;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.FighterManager;
 import dev.xkittyqueenx.mobFightersDeluxe.utilities.Utils;
 import org.bukkit.entity.Player;
 
-public class ExpCharge extends Attribute implements Rooted {
+public class ExpCharge extends Attribute {
 
     protected double delay;
     protected boolean chargeWhenInAir;
@@ -24,11 +23,6 @@ public class ExpCharge extends Attribute implements Rooted {
         this.chargeWhenSneaking = chargeWhenSneaking;
         this.startFullEnergy = startFullEnergy;
         task = this.runTaskTimer(plugin, 0, (long) delay);
-    }
-
-    @Override
-    public void onRooted() {
-
     }
 
     @Override

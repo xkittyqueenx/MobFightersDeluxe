@@ -1,7 +1,7 @@
 package dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs;
 
-public interface Rooted {
+public interface Stunned {
 
-    public abstract void onRooted();
+    public abstract void onStunned();
 
 }

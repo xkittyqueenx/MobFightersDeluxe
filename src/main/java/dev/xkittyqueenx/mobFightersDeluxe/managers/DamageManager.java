@@ -84,6 +84,10 @@ public class DamageManager implements Listener {
         if (damager instanceof Player && e.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK) {
             Fighter fighter = FighterManager.getPlayerFighters().get(damager);
             if (fighter != null) {
+                if (fighter.isStunned()) {
+                    e.setCancelled(true);
+                    return;
+                }
                 damage = fighter.getDamage();
             }
         }
@@ -379,7 +383,7 @@ public class DamageManager implements Listener {
                         final double movementSpeed = 0.1;
                         VelocityUtil.setVelocity(living, trajectory, vel, false,
                                 0, Math.abs(0.2 * knockback), Math.min(0.4 + (0.04 * knockback), 0.6), true, 0.4);
-                        kit.setRooted(true);
+                        kit.applyStunned(1000.0);
                         int duration = Math.min((int) (3 * vel), 50);
                         if (vel >= 4.5) {
                             damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_GROUND_HEAVY, 1.25f, 1f);
@@ -476,7 +480,7 @@ public class DamageManager implements Listener {
                                     player.setAllowFlight(allowFlight);
                                     Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
                                     Utils.sendActionBarMessage(" ", player);
-                                    kit1.setRooted(false);
+                                    kit1.applyStunned(0.10);
                                     cancel();
                                     return;
                                 }
@@ -519,7 +523,7 @@ public class DamageManager implements Listener {
                                     player.setAllowFlight(allowFlight);
                                     Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
                                     Utils.sendActionBarMessage(" ", player);
-                                    kit1.setRooted(false);
+                                    kit1.applyStunned(0.10);
                                     cancel();
                                     return;
                                 }
@@ -570,7 +574,7 @@ public class DamageManager implements Listener {
                     final double movementSpeed = 0.1;
                     VelocityUtil.setVelocity(living, trajectory, vel, false,
                             0, Math.abs(0.2 * knockback), Math.min(0.4 + (0.04 * knockback), 0.6), true, 0.4);
-                    kit.setRooted(true);
+                    kit.applyStunned(1000.0);
                     int duration = Math.min((int) (3 * vel), 50);
                     if (vel >= 4.5) {
                         damagee.getWorld().playSound(damagee.getLocation(), Sound.ITEM_MACE_SMASH_GROUND_HEAVY, 1.25f, 1f);
@@ -667,7 +671,7 @@ public class DamageManager implements Listener {
                                 player.setAllowFlight(allowFlight);
                                 Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
                                 Utils.sendActionBarMessage(" ", player);
-                                kit1.setRooted(false);
+                                kit1.applyStunned(0.10);
                                 cancel();
                                 return;
                             }
@@ -710,7 +714,7 @@ public class DamageManager implements Listener {
                                 player.setAllowFlight(allowFlight);
                                 Bukkit.getScheduler().runTaskLater(plugin, () -> player.setVelocity(silverfishVelocity), 0L);
                                 Utils.sendActionBarMessage(" ", player);
-                                kit1.setRooted(false);
+                                kit1.applyStunned(0.10);
                                 cancel();
                                 return;
                             }

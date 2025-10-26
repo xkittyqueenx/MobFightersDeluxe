@@ -1,6 +1,7 @@
 package dev.xkittyqueenx.mobFightersDeluxe.fighters.original;
 
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
+import dev.xkittyqueenx.mobFightersDeluxe.abilities.zombie.InfectiousSwipe;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Bloodlust;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Regeneration;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Ultimate;
@@ -45,6 +46,9 @@ public class ZombieFighter extends Fighter {
 
     @Override
     public void initializeKit() {
+
+        setAbility(new InfectiousSwipe(), 0);
+
         addAttribute(new Bloodlust());
         addAttribute(new GenericDoubleJump(0.9, 0.9, Sound.ENTITY_GHAST_SHOOT, 1f, 1f));
         addAttribute(new Ultimate(1f, 400.0f));
@@ -58,7 +62,7 @@ public class ZombieFighter extends Fighter {
 
     @Override
     public void setGameHotbar() {
-        setItem(new ItemStack(Material.IRON_SWORD), 0);
+        setSwordItem(new ItemStack(Material.IRON_SWORD), 0);
         setItem(new ItemStack(Material.IRON_AXE), 1);
         setItem(new ItemStack(Material.IRON_SHOVEL), 2);
 

@@ -3,35 +3,33 @@ package dev.xkittyqueenx.mobFightersDeluxe.fighters;
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
 import dev.xkittyqueenx.mobFightersDeluxe.abilities.Ability;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Attribute;
+import dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs.Stunned;
 import dev.xkittyqueenx.mobFightersDeluxe.events.PlayerDisguiseEvent;
 import dev.xkittyqueenx.mobFightersDeluxe.events.PlayerUndisguiseEvent;
-import dev.xkittyqueenx.mobFightersDeluxe.managers.FighterManager;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.GameManager;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.gamestate.GameState;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.smashserver.SmashServer;
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.ItemLore;
 import io.papermc.paper.datacomponent.item.TooltipDisplay;
+import io.papermc.paper.datacomponent.item.UseCooldown;
 import io.papermc.paper.datacomponent.item.consumable.ItemUseAnimation;
+import io.papermc.paper.entity.LookAnchor;
 import io.papermc.paper.entity.TeleportFlag;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.*;
 import org.bukkit.entity.*;
-import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerAnimationEvent;
-import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.potion.PotionEffect;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
-import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -56,12 +54,16 @@ public abstract class Fighter implements Listener, Runnable {
     protected boolean invincible = false;
     protected boolean intangible = false;
 
+    public int stunned_task = -1;
+    public long lastStunTimeMs = 0;
+
     protected BukkitTask task;
 
     protected EntityType disguiseType = null;
     protected Mob disguise = null;
     protected TextDisplay textDisplay;
 
+    protected boolean isStunned = false;
     protected boolean isRooted = false;
 
     protected Player owner = null;
@@ -115,6 +117,9 @@ public abstract class Fighter implements Listener, Runnable {
         } else {
             disguise.setPose(Pose.STANDING, true);
         }
+
+        updateInventory();
+
     }
 
     public abstract void setPreviewHotbar();
@@ -200,6 +205,55 @@ public abstract class Fighter implements Listener, Runnable {
         return null;
     }
 
+    public void applyStunned(double duration) {
+        if (Bukkit.getScheduler().isCurrentlyRunning(stunned_task) || Bukkit.getScheduler().isQueued(stunned_task)) {
+            Bukkit.getScheduler().cancelTask(stunned_task);
+        }
+        owner.getAttribute(org.bukkit.attribute.Attribute.MOVEMENT_SPEED).setBaseValue(0.0);
+        owner.getAttribute(org.bukkit.attribute.Attribute.JUMP_STRENGTH).setBaseValue(0.0);
+        owner.getAttribute(org.bukkit.attribute.Attribute.GRAVITY).setBaseValue(0.04);
+        for (Attribute attribute : attributes) {
+            if (attribute instanceof Stunned stunned) {
+                stunned.onStunned();
+            }
+        }
+        for (Ability ability : hotbarAbilities) {
+            if (ability instanceof Stunned stunned) {
+                stunned.onStunned();
+            }
+        }
+        owner.setRiptiding(true);
+        setStunned(true);
+        lastStunTimeMs = System.currentTimeMillis();
+        final Vector vector = owner.getLocation().getDirection().multiply(5.0).clone();
+        owner.lookAt(owner.getLocation().clone().add(vector), LookAnchor.FEET);
+        stunned_task = Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, new Runnable() {
+            final Player player = owner;
+            final long start_time_ms = System.currentTimeMillis();
+            @Override
+            public void run() {
+                if (owner == null) {
+                    Bukkit.getScheduler().cancelTask(stunned_task);
+                    player.setRiptiding(false);
+                    Objects.requireNonNull(player.getAttribute(org.bukkit.attribute.Attribute.MOVEMENT_SPEED)).setBaseValue(0.1);
+                    Objects.requireNonNull(player.getAttribute(org.bukkit.attribute.Attribute.JUMP_STRENGTH)).setBaseValue(0.4199999);
+                    player.getAttribute(org.bukkit.attribute.Attribute.GRAVITY).setBaseValue(0.08);
+                    return;
+                }
+                long elapsed = System.currentTimeMillis() - start_time_ms;
+                if (elapsed >= (duration * 1000)) {
+                    Bukkit.getScheduler().cancelTask(stunned_task);
+                    setStunned(false);
+                    owner.setRiptiding(false);
+                    Objects.requireNonNull(owner.getAttribute(org.bukkit.attribute.Attribute.MOVEMENT_SPEED)).setBaseValue(0.1);
+                    Objects.requireNonNull(owner.getAttribute(org.bukkit.attribute.Attribute.JUMP_STRENGTH)).setBaseValue(0.4199999);
+                    owner.getAttribute(org.bukkit.attribute.Attribute.GRAVITY).setBaseValue(0.08);
+                    return;
+                }
+            }
+        }, 0L, 0L);
+    }
+
     public abstract void initializeKit();
 
     public Ability getAbilityInSlot(int inventorySlot) {
@@ -229,6 +283,23 @@ public abstract class Fighter implements Listener, Runnable {
         attributes.remove(attribute);
         attribute.afterRemoval(owner);
         attribute.remove();
+    }
+
+    public void updateInventory() {
+        if (owner == null) return;
+        for (int slot = 0; slot < 9; slot++) {  // Changed to < 9 to include all slots
+            Ability ability = getAbilityInSlot(slot);
+            if (ability == null) continue;
+
+            ItemStack itemStack = new ItemStack(ability.getItemStack());
+
+            // Check if ability should be disabled due to stun/root
+            if (isStunned && ability instanceof Stunned) {
+                itemStack = itemStack.withType(Material.BARRIER);
+            }
+
+            owner.getInventory().setItem(slot, itemStack);
+        }
     }
 
     public void resetCooldowns(Player player) {
@@ -280,12 +351,14 @@ public abstract class Fighter implements Listener, Runnable {
                     .addHiddenComponents(DataComponentTypes.UNBREAKABLE)
                     .addHiddenComponents(DataComponentTypes.ENCHANTMENTS)
                     .build());
+            item.setData(DataComponentTypes.USE_COOLDOWN, UseCooldown.useCooldown(1).cooldownGroup(Key.key(String.valueOf(hotbarSlot))).build());
             item.setData(DataComponentTypes.MAX_DAMAGE, 10000);
             item.unsetData(DataComponentTypes.ATTRIBUTE_MODIFIERS);
             item.setData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, false); // Make it glow!
             if (item.getType() == Material.NETHER_STAR) {
                 item.unsetData(DataComponentTypes.UNBREAKABLE);
             }
+            attribute.setItemStack(item);
         }
         owner.getInventory().setItem(hotbarSlot, item);
     }
@@ -310,12 +383,14 @@ public abstract class Fighter implements Listener, Runnable {
                     .addHiddenComponents(DataComponentTypes.UNBREAKABLE)
                     .addHiddenComponents(DataComponentTypes.ENCHANTMENTS)
                     .build());
+            item.setData(DataComponentTypes.USE_COOLDOWN, UseCooldown.useCooldown(1).cooldownGroup(Key.key(String.valueOf(hotbarSlot))).build());
             item.setData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, false); // Make it glow!
             item.setData(DataComponentTypes.CONSUMABLE, io.papermc.paper.datacomponent.item.Consumable.consumable()
                     .consumeSeconds(Integer.MAX_VALUE)
                     .animation(ItemUseAnimation.BLOCK)
                     .hasConsumeParticles(false)
                     .build());
+            attribute.setItemStack(item);
         }
         owner.getInventory().setItem(hotbarSlot, item);
     }
@@ -499,5 +574,13 @@ public abstract class Fighter implements Listener, Runnable {
 
     public void setLore(List<Component> lore) {
         this.lore = lore;
+    }
+
+    public boolean isStunned() {
+        return isStunned;
+    }
+
+    public void setStunned(boolean stunned) {
+        isStunned = stunned;
     }
 }

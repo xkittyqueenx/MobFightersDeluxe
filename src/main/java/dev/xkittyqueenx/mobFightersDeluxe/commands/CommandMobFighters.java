@@ -1,10 +1,12 @@
 package dev.xkittyqueenx.mobFightersDeluxe.commands;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
+import dev.xkittyqueenx.mobFightersDeluxe.events.SmashDamageEvent;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.FighterManager;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.GameManager;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.smashserver.SmashServer;
@@ -19,6 +21,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.EntityDamageEvent;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -61,6 +64,31 @@ public class CommandMobFighters {
     public static LiteralCommandNode<CommandSourceStack> fightersCommand() {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("mf");
         root.then(Commands.literal("admin")
+                .then(Commands.literal("damage")
+                        .then(Commands.argument("damage", DoubleArgumentType.doubleArg())
+                                .then(Commands.argument("knockback", DoubleArgumentType.doubleArg())
+                                        .executes(ctx -> {
+                                            if (!(ctx.getSource().getExecutor() instanceof Player player)) {
+                                                return Command.SINGLE_SUCCESS;
+                                            }
+                                            SmashServer server = GameManager.getPlayerServer(player);
+                                            if(server == null || !player.isOp()) {
+                                                return Command.SINGLE_SUCCESS;
+                                            }
+                                            double damage = ctx.getArgument("damage", Double.class);
+                                            double knockback = ctx.getArgument("knockback", Double.class);
+                                            SmashDamageEvent smashDamageEvent = new SmashDamageEvent(player, player, damage);
+                                            smashDamageEvent.multiplyKnockback(knockback);
+                                            smashDamageEvent.setKnockbackOrigin(player.getLocation().add(player.getLocation().getDirection().multiply(2)));
+                                            smashDamageEvent.setDamageCause(EntityDamageEvent.DamageCause.ENTITY_ATTACK);
+                                            smashDamageEvent.setDamager(player);
+                                            smashDamageEvent.setReason("Command");
+                                            smashDamageEvent.callEvent();
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                )
+                        )
+                )
                 .then(Commands.literal("reload")
                         .executes(ctx -> {
                             if (!(ctx.getSource().getExecutor() instanceof Player player)) {

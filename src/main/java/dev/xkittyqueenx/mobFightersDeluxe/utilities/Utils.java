@@ -68,6 +68,8 @@ public class Utils {
             player.setLevel(0);
             player.setExp(0);
             Objects.requireNonNull(player.getAttribute(Attribute.ATTACK_SPEED)).setBaseValue(1000);
+            Objects.requireNonNull(player.getAttribute(Attribute.MOVEMENT_SPEED)).setBaseValue(0.1);
+            Objects.requireNonNull(player.getAttribute(Attribute.JUMP_STRENGTH)).setBaseValue(0.4199999);
             Fighter fighter = FighterManager.getPlayerFighters().get(player);
             if(fighter != null && fighter.getAttributeByClass(ExpCharge.class) != null) {
                 player.setExp(1f);

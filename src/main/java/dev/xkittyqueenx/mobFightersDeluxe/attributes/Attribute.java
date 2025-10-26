@@ -1,9 +1,8 @@
 package dev.xkittyqueenx.mobFightersDeluxe.attributes;
 
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
-import dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs.Rooted;
+import dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs.Stunned;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
-import dev.xkittyqueenx.mobFightersDeluxe.managers.CooldownManager;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.FighterManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -11,6 +10,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitScheduler;
@@ -22,6 +22,14 @@ import java.util.List;
 public abstract class Attribute extends BukkitRunnable implements Listener {
 
     public static MiniMessage mm = MiniMessage.miniMessage();
+
+    public ItemStack getItemStack() {
+        return itemStack;
+    }
+
+    public void setItemStack(ItemStack itemStack) {
+        this.itemStack = itemStack;
+    }
 
     public enum AbilityUsage {
         LEFT_CLICK("Left-Click"),
@@ -62,6 +70,8 @@ public abstract class Attribute extends BukkitRunnable implements Listener {
     protected Player owner;
     protected BukkitTask task;
 
+    protected ItemStack itemStack = null;
+
     public double cooldownTime = 0;
     public float expUsed = 0;
     protected boolean needsExactXP = true;
@@ -87,7 +97,7 @@ public abstract class Attribute extends BukkitRunnable implements Listener {
         if(!needsExactXP && owner.getExp() <= 0)
             return false;
         if (kit != null) {
-            if (this instanceof Rooted && kit.isRooted()) return false;
+            if (this instanceof Stunned && kit.isStunned()) return false;
         }
         return true;
     }
