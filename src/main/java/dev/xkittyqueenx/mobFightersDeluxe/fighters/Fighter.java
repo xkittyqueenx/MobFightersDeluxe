@@ -3,12 +3,13 @@ package dev.xkittyqueenx.mobFightersDeluxe.fighters;
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
 import dev.xkittyqueenx.mobFightersDeluxe.abilities.Ability;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Attribute;
-import dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs.Stunned;
+import dev.xkittyqueenx.mobFightersDeluxe.attributes.interfaces.Stunned;
 import dev.xkittyqueenx.mobFightersDeluxe.events.PlayerDisguiseEvent;
 import dev.xkittyqueenx.mobFightersDeluxe.events.PlayerUndisguiseEvent;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.GameManager;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.gamestate.GameState;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.smashserver.SmashServer;
+import dev.xkittyqueenx.mobFightersDeluxe.utilities.Utils;
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.ItemLore;
 import io.papermc.paper.datacomponent.item.TooltipDisplay;
@@ -22,9 +23,11 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.*;
 import org.bukkit.entity.*;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.inventory.Inventory;
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 import org.bukkit.plugin.Plugin;
@@ -50,6 +53,7 @@ public abstract class Fighter implements Listener, Runnable {
     protected String glyph = "";
     public Sound selectSound = Sound.UI_BUTTON_CLICK;
     public Sound hurtSound = Sound.ENTITY_PLAYER_HURT;
+    public Sound walkSound = Sound.ENTITY_PLAYER_SMALL_FALL;
 
     protected boolean invincible = false;
     protected boolean intangible = false;
@@ -122,6 +126,43 @@ public abstract class Fighter implements Listener, Runnable {
 
     }
 
+    @EventHandler
+    public void onPlayerSwapSlot(PlayerItemHeldEvent e) {
+        if (!e.getPlayer().equals(owner)) return;
+        Ability oldAbility = getAbilityInSlot(e.getPreviousSlot());
+        if (oldAbility != null && oldAbility.isActiveAbility && oldAbility.isActive) {
+            e.setCancelled(true);
+            owner.playSound(owner.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1f, 1f);
+            return;
+        }
+        Ability ability = getAbilityInSlot(e.getNewSlot());
+        if (ability != null) {
+            if (ability.isActiveAbility && !ability.isActive) {
+                ability.checkAndActivate();
+                return;
+            }
+            ability.checkAndActivate();
+        }
+        e.setCancelled(true);
+        owner.getInventory().setHeldItemSlot(0);
+    }
+
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent e) {
+        if (owner == null) return;
+        Location to = e.getTo();
+        if (to.toVector().equals(e.getFrom().toVector()) || !Utils.entityIsOnGround(owner) || disguise == null || disguise.getTicksLived() % 5 != 0) {
+            return;
+        }
+        if (owner.isSneaking()) {
+            owner.getWorld().playSound(owner.getLocation(), walkSound, 0.1f, 0.75f);
+        } else if (owner.isSprinting()) {
+            owner.getWorld().playSound(owner.getLocation(), walkSound, 0.5f, 1.25f);
+        } else {
+            owner.getWorld().playSound(owner.getLocation(), walkSound, 0.3f, 1f);
+        }
+    }
+
     public abstract void setPreviewHotbar();
 
     public abstract void setGameHotbar();
@@ -153,6 +194,7 @@ public abstract class Fighter implements Listener, Runnable {
         updatePlaying(server.getState(), true);
         task = Bukkit.getScheduler().runTaskTimer(MobFightersDeluxe.getInstance(), this, 0L, 0L);
         equipDisguise();
+        player.getInventory().setHeldItemSlot(0);
     }
 
     public void updatePlaying(short new_state, boolean reload_hotbar) {
@@ -287,6 +329,20 @@ public abstract class Fighter implements Listener, Runnable {
 
     public void updateInventory() {
         if (owner == null) return;
+        Ability checkAbility = getAbilityInSlot(owner.getInventory().getHeldItemSlot());
+        if (checkAbility != null && checkAbility.isActiveAbility && checkAbility.isActive) {
+            for (int slot = 0; slot < 9; slot++) {  // Changed to < 9 to include all slots
+                Ability ability = getAbilityInSlot(slot);
+                if (ability == null || ability.equals(checkAbility)) continue;
+
+                ItemStack itemStack = new ItemStack(ability.getItemStack());
+
+                itemStack = itemStack.withType(Material.BARRIER);
+
+                owner.getInventory().setItem(slot, itemStack);
+            }
+            return;
+        }
         for (int slot = 0; slot < 9; slot++) {  // Changed to < 9 to include all slots
             Ability ability = getAbilityInSlot(slot);
             if (ability == null) continue;
@@ -303,19 +359,9 @@ public abstract class Fighter implements Listener, Runnable {
     }
 
     public void resetCooldowns(Player player) {
-        Inventory inventory = player.getInventory();
-        ItemStack item0 = inventory.getItem(0);
-        if (item0 != null) {
-            player.setCooldown(item0, 0);
-        }
-        ItemStack item1 = inventory.getItem(1);
-        if (item1 != null) {
-            player.setCooldown(item1, 0);
-        }
-        ItemStack item2 = inventory.getItem(2);
-        if (item2 != null) {
-            player.setCooldown(item2, 0);
-        }
+        player.setCooldown(Key.key("0"), 0);
+        player.setCooldown(Key.key("1"), 0);
+        player.setCooldown(Key.key("2"), 0);
     }
 
     public void setAbility(Ability ability, int hotbarSlot) {
@@ -399,6 +445,7 @@ public abstract class Fighter implements Listener, Runnable {
         if (owner == null || disguiseType == null) return;
 
         owner.setCollidable(false);
+        owner.setSilent(true);
 
         disguise = (Mob) owner.getWorld().spawnEntity(owner.getLocation(), disguiseType, false);
         disguise.setCanPickupItems(false);
@@ -415,6 +462,7 @@ public abstract class Fighter implements Listener, Runnable {
         disguise.setAggressive(true);
         disguise.getEquipment().clear();
         disguise.setMetadata(owner.getUniqueId().toString(), new FixedMetadataValue(plugin, 1));
+        disguise.setSilent(true);
 
         textDisplay = owner.getWorld().spawn(owner.getEyeLocation(), TextDisplay.class);
         textDisplay.setPersistent(true);
@@ -434,14 +482,26 @@ public abstract class Fighter implements Listener, Runnable {
 
     public void destroy() {
         if (owner == null) return;
-        PlayerUndisguiseEvent playerUndisguiseEvent = new PlayerUndisguiseEvent(owner);
-        playerUndisguiseEvent.callEvent();
+        for (Attribute attribute : attributes) {
+            attribute.remove();
+        }
+        attributes.clear();
         if (disguise != null) {
-            owner.setCollidable(true);
-            owner = null;
             disguise.remove();
             disguise = null;
         }
+        List<Mob> mobs = owner.getWorld().getEntitiesByClass(Mob.class).stream().toList();
+        for (Mob mob : mobs) {
+            if (mob.hasMetadata(owner.getUniqueId().toString())) {
+                mob.remove();
+            }
+        }
+        owner.getInventory().clear();
+        owner.setCollidable(true);
+        owner.setSilent(false);
+        owner = null;
+        PlayerUndisguiseEvent playerUndisguiseEvent = new PlayerUndisguiseEvent(owner);
+        playerUndisguiseEvent.callEvent();
     }
 
     public Mob getDisguise() {
@@ -495,6 +555,7 @@ public abstract class Fighter implements Listener, Runnable {
     public void setInvincible(boolean invincible) {
         this.invincible = invincible;
     }
+
 
     public boolean isIntangible() {
         return intangible;

@@ -1,4 +1,4 @@
-package dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs;
+package dev.xkittyqueenx.mobFightersDeluxe.attributes.interfaces;
 
 public interface Stunned {
 

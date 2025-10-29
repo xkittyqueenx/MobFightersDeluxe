@@ -1,16 +1,14 @@
 package dev.xkittyqueenx.mobFightersDeluxe.fighters.original;
 
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
-import dev.xkittyqueenx.mobFightersDeluxe.abilities.zombie.InfectiousSwipe;
+import dev.xkittyqueenx.mobFightersDeluxe.abilities.zombie.BladeSlash;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Bloodlust;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Regeneration;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.Ultimate;
 import dev.xkittyqueenx.mobFightersDeluxe.attributes.doublejumps.GenericDoubleJump;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
 import io.papermc.paper.datacomponent.DataComponentTypes;
-import io.papermc.paper.datacomponent.item.Tool;
 import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -40,19 +38,23 @@ public class ZombieFighter extends Fighter {
                 mm.deserialize(" ")
         );
         this.disguiseType = EntityType.ZOMBIE;
+        this.selectSound = Sound.ENTITY_HUSK_CONVERTED_TO_ZOMBIE;
         this.hurtSound = Sound.ENTITY_ZOMBIE_HURT;
+        this.walkSound = Sound.ENTITY_ZOMBIE_STEP;
         this.icon = "4187";
     }
 
     @Override
     public void initializeKit() {
 
-        setAbility(new InfectiousSwipe(), 0);
+        setAbility(new BladeSlash(), 0);
 
         addAttribute(new Bloodlust());
-        addAttribute(new GenericDoubleJump(0.9, 0.9, Sound.ENTITY_GHAST_SHOOT, 1f, 1f));
+        addAttribute(new GenericDoubleJump(0.9, 0.9, Sound.ENTITY_ZOMBIE_INFECT, 0.5f, 1.5f));
         addAttribute(new Ultimate(1f, 400.0f));
         addAttribute(new Regeneration(this.regeneration));
+
+        resetCooldowns(owner);
     }
 
     @Override
@@ -62,7 +64,7 @@ public class ZombieFighter extends Fighter {
 
     @Override
     public void setGameHotbar() {
-        setSwordItem(new ItemStack(Material.IRON_SWORD), 0);
+        setItem(new ItemStack(Material.IRON_SWORD), 0);
         setItem(new ItemStack(Material.IRON_AXE), 1);
         setItem(new ItemStack(Material.IRON_SHOVEL), 2);
 

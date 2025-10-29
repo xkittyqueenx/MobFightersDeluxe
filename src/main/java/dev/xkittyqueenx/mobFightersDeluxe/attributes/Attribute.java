@@ -1,7 +1,7 @@
 package dev.xkittyqueenx.mobFightersDeluxe.attributes;
 
 import dev.xkittyqueenx.mobFightersDeluxe.MobFightersDeluxe;
-import dev.xkittyqueenx.mobFightersDeluxe.attributes.debuffs.Stunned;
+import dev.xkittyqueenx.mobFightersDeluxe.attributes.interfaces.Stunned;
 import dev.xkittyqueenx.mobFightersDeluxe.fighters.Fighter;
 import dev.xkittyqueenx.mobFightersDeluxe.managers.FighterManager;
 import net.kyori.adventure.text.Component;
